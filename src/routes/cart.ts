@@ -128,7 +128,9 @@ cartRouter.post(
     const cart = await getOrCreateCart(req.auth.userId);
 
     // Check if item already exists
-    const existingItemIndex = cart.items.findIndex((i) => i.id === item.id);
+    const existingItemIndex = cart.items.findIndex(
+      (i: CartItem) => i.id === item.id
+    );
     if (existingItemIndex >= 0) {
       // Update quantity
       cart.items[existingItemIndex].quantity += item.quantity;
@@ -171,7 +173,7 @@ cartRouter.put(
     const { quantity } = req.body as { quantity: number };
 
     const cart = await getOrCreateCart(req.auth.userId);
-    const itemIndex = cart.items.findIndex((i) => i.id === itemId);
+    const itemIndex = cart.items.findIndex((i: CartItem) => i.id === itemId);
 
     if (itemIndex < 0) {
       throw new ApiError(404, "Item not found in cart", "CartItemNotFound");
@@ -205,7 +207,7 @@ cartRouter.delete("/items/:itemId", requireAuth, async (req, res) => {
 
   const { itemId } = req.params;
   const cart = await getOrCreateCart(req.auth.userId);
-  const itemIndex = cart.items.findIndex((i) => i.id === itemId);
+  const itemIndex = cart.items.findIndex((i: CartItem) => i.id === itemId);
 
   if (itemIndex < 0) {
     throw new ApiError(404, "Item not found in cart", "CartItemNotFound");
@@ -376,7 +378,7 @@ cartRouter.post(
         await validateProduct(guestItem.productId);
 
         const existingIndex = userCart.items.findIndex(
-          (i) => i.id === guestItem.id
+          (i: CartItem) => i.id === guestItem.id
         );
         if (existingIndex >= 0) {
           // Item exists - use higher quantity
@@ -416,4 +418,3 @@ cartRouter.post(
     });
   }
 );
-
