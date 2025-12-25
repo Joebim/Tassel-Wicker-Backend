@@ -26,7 +26,11 @@ export function createApp() {
   app.use(rateLimiter());
 
   // Stripe webhooks need raw body (must be mounted BEFORE express.json()).
-  app.post("/api/webhooks/stripe", express.raw({ type: "application/json" }), stripeWebhookHandler);
+  app.post(
+    "/api/webhooks/stripe",
+    express.raw({ type: "application/json" }),
+    stripeWebhookHandler
+  );
 
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
@@ -37,7 +41,12 @@ export function createApp() {
       origin: origins,
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Stripe-Signature", "X-Request-Id"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Stripe-Signature",
+        "X-Request-Id",
+      ],
     })
   );
 
@@ -49,6 +58,28 @@ export function createApp() {
     res.json({ ok: true });
   });
 
+  // Root route - API information
+  app.get("/", (_req, res) => {
+    res.json({
+      name: "Tassel & Wicker Backend API",
+      version: "0.1.0",
+      status: "running",
+      environment: env.NODE_ENV,
+      endpoints: {
+        health: "/health",
+        api: "/api",
+        auth: "/api/auth",
+        products: "/api/products",
+        categories: "/api/categories",
+        orders: "/api/orders",
+        cart: "/api/cart",
+        content: "/api/content",
+        uploads: "/api/uploads",
+      },
+      documentation: "See API documentation for detailed endpoint information",
+    });
+  });
+
   app.use("/api", apiRouter);
 
   app.use(notFound);
@@ -56,5 +87,3 @@ export function createApp() {
 
   return app;
 }
-
-
