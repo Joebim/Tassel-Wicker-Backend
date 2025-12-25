@@ -100,6 +100,7 @@ async function main() {
     });
     createdByExternalId.set(externalId, mainDoc);
 
+    
     if (hasChildren) {
       const childIds: any[] = [];
       for (const child of p.items) {
