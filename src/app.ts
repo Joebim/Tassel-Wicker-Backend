@@ -35,20 +35,36 @@ export function createApp() {
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
 
-  const origins = env.CORS_ORIGINS.length ? env.CORS_ORIGINS : undefined;
-  app.use(
-    cors({
-      origin: origins,
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "Stripe-Signature",
-        "X-Request-Id",
-      ],
-    })
-  );
+  // CORS configuration
+  const corsOptions: cors.CorsOptions = {
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Stripe-Signature",
+      "X-Request-Id",
+      "X-Session-ID",
+    ],
+  };
+
+  // Set origin based on environment
+  if (env.CORS_ORIGINS.length > 0) {
+    // Use explicit origins from env
+    corsOptions.origin = env.CORS_ORIGINS;
+  } else if (env.NODE_ENV === "production") {
+    // In production, default to common frontend origins if not set
+    corsOptions.origin = [
+      "https://tassel-wicker-frontend.vercel.app",
+      "https://www.tasselandwicker.com",
+      "https://tasselandwicker.com",
+    ];
+  } else {
+    // In development, allow all origins
+    corsOptions.origin = true;
+  }
+
+  app.use(cors(corsOptions));
 
   if (env.NODE_ENV !== "test") {
     app.use(morgan("dev"));
