@@ -14,7 +14,7 @@ async function main() {
 
   const staticModulePath = path.resolve(
     process.cwd(),
-    "tassel-wicker-next/utils/productData.ts"
+    "scripts/data/productData.ts"
   );
   // On Windows, dynamic import needs a valid file:// URL.
   const mod = (await import(pathToFileURL(staticModulePath).href)) as AnyRecord;
@@ -29,7 +29,7 @@ async function main() {
     typeof getAdditionalProducts !== "function"
   ) {
     throw new Error(
-      "Could not import static products from tassel-wicker-next/utils/productData.ts"
+      "Could not import static products from scripts/data/productData.ts"
     );
   }
 
@@ -100,7 +100,6 @@ async function main() {
     });
     createdByExternalId.set(externalId, mainDoc);
 
-    
     if (hasChildren) {
       const childIds: any[] = [];
       for (const child of p.items) {
