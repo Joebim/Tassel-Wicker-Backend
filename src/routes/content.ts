@@ -24,7 +24,6 @@ const VALID_PAGES: ContentPage[] = [
   "shipping",
 ];
 
-
 const PAGE_TITLES: Record<ContentPage, string> = {
   about: "About Page",
   "cookie-policy": "Cookie Policy",
