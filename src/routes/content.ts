@@ -99,9 +99,10 @@ function validateAboutContent(content: string): void {
   }
 }
 
-// 1. Get Content (Admin)
+// 1. Get Content (Admin - with sensitive fields)
+// Must come before /:page to avoid route conflicts
 contentRouter.get(
-  "/:page",
+  "/admin/:page",
   requireAuth,
   requireRole("admin", "moderator"),
   async (req, res) => {
@@ -120,8 +121,8 @@ contentRouter.get(
   }
 );
 
-// 2. Get Public Content (No auth required)
-contentRouter.get("/public/:page", async (req, res) => {
+// 2. Get Public Content (No auth required - for users)
+contentRouter.get("/:page", async (req, res) => {
   const page = validatePage(req.params.page);
   const content = await ContentModel.findOne({ page });
 
@@ -258,4 +259,3 @@ contentRouter.post(
     });
   }
 );
-

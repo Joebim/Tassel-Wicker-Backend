@@ -162,3 +162,6 @@ main().catch((e) => {
   console.error("[seed-categories] Failed:", e);
   process.exit(1);
 });
+
+
+
