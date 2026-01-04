@@ -8,6 +8,7 @@ import { issueTokens, revokeRefreshToken, rotateRefreshToken } from "../services
 import { requireAuth } from "../middleware/auth";
 import { randomToken, sha256 } from "../utils/crypto";
 import { signAccessToken } from "../utils/jwt";
+import { logActivity, getIpAddress, getUserAgent } from "../services/activityLogger";
 
 export const authRouter = Router();
 
@@ -44,6 +45,16 @@ authRouter.post("/register", validateBody(registerSchema), async (req, res) => {
   });
 
   const tokens = await issueTokens({ id: (user as any).id, role: user.role });
+  
+  // Log user registration
+  await logActivity({
+    type: "user.registered",
+    userId: (user as any).id,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req),
+    metadata: { email: user.email, role: user.role },
+  });
+  
   res.status(201).json({ user: user.toJSON(), token: tokens.accessToken, refreshToken: tokens.refreshToken });
 });
 
@@ -57,12 +68,41 @@ authRouter.post("/login", validateBody(loginSchema), async (req, res) => {
   const { email, password } = req.body as z.infer<typeof loginSchema>;
 
   const user = await UserModel.findOne({ email }).select("+passwordHash");
-  if (!user) throw new ApiError(401, "Invalid email or password", "Unauthorized");
+  if (!user) {
+    // Log failed login attempt
+    await logActivity({
+      type: "user.login_failed",
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: { email },
+    });
+    throw new ApiError(401, "Invalid email or password", "Unauthorized");
+  }
 
   const ok = await verifyPassword(password, (user as any).passwordHash);
-  if (!ok) throw new ApiError(401, "Invalid email or password", "Unauthorized");
+  if (!ok) {
+    // Log failed login attempt
+    await logActivity({
+      type: "user.login_failed",
+      userId: (user as any).id,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: { email },
+    });
+    throw new ApiError(401, "Invalid email or password", "Unauthorized");
+  }
 
   const tokens = await issueTokens({ id: (user as any).id, role: user.role });
+  
+  // Log successful login
+  await logActivity({
+    type: "user.login",
+    userId: (user as any).id,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req),
+    metadata: { email: user.email },
+  });
+  
   res.json({ user: user.toJSON(), token: tokens.accessToken, refreshToken: tokens.refreshToken });
 });
 
@@ -88,7 +128,18 @@ const logoutSchema = z.object({
 
 authRouter.post("/logout", validateBody(logoutSchema), async (req, res) => {
   const { refreshToken } = req.body as z.infer<typeof logoutSchema>;
-  await revokeRefreshToken(refreshToken);
+  const revoked = await revokeRefreshToken(refreshToken);
+  
+  // Log logout if we have user info
+  if (revoked?.userId) {
+    await logActivity({
+      type: "user.logout",
+      userId: revoked.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+    });
+  }
+  
   res.json({ success: true });
 });
 
@@ -114,6 +165,15 @@ authRouter.post("/forgot-password", validateBody(forgotSchema), async (req, res)
   user.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
   await user.save();
 
+  // Log password reset request
+  await logActivity({
+    type: "user.password_reset_requested",
+    userId: (user as any).id,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req),
+    metadata: { email: user.email },
+  });
+
   // Email sending is wired up in the email module; for now, return a generic success.
   // (In dev you may choose to log token.)
   res.json({ success: true });
@@ -138,6 +198,15 @@ authRouter.post("/reset-password", validateBody(resetSchema), async (req, res) =
   user.passwordResetTokenHash = undefined;
   user.passwordResetExpiresAt = undefined;
   await user.save();
+
+  // Log password reset
+  await logActivity({
+    type: "user.password_reset",
+    userId: (user as any).id,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req),
+    metadata: { email: user.email },
+  });
 
   res.json({ success: true });
 });

@@ -9,6 +9,7 @@ import { requireRole } from "../middleware/requireRole";
 import { OrderModel } from "../models/Order";
 import { ProductModel } from "../models/Product";
 import { generateOrderNumber } from "../utils/orderNumber";
+import { logActivity, getIpAddress, getUserAgent } from "../services/activityLogger";
 
 export const ordersRouter = Router();
 
@@ -107,6 +108,36 @@ ordersRouter.post("/", optionalAuth, validateBody(createOrderSchema), async (req
     notes: body.notes,
   });
 
+  // Log order creation
+  await logActivity({
+    type: "order.created",
+    userId: req.auth?.userId,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req),
+    metadata: {
+      orderId: (order as any).id,
+      orderNumber: order.orderNumber,
+      total: order.totals.total,
+      itemCount: order.items.length,
+      paymentMethod: order.payment.method,
+    },
+  });
+
+  // Log payment received if status is paid
+  if (order.payment.status === "paid") {
+    await logActivity({
+      type: "order.payment_received",
+      userId: req.auth?.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        orderId: (order as any).id,
+        orderNumber: order.orderNumber,
+        amount: order.totals.total,
+      },
+    });
+  }
+
   res.status(201).json({ item: order.toJSON() });
 });
 
@@ -153,6 +184,35 @@ ordersRouter.patch(
 
     const updated = await OrderModel.findByIdAndUpdate(id, update, { new: true });
     if (!updated) throw new ApiError(404, "Order not found", "NotFound");
+
+    // Log order update
+    await logActivity({
+      type: "order.updated",
+      userId: req.auth!.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        orderId: (updated as any).id,
+        orderNumber: updated.orderNumber,
+        status: updated.status,
+        previousStatus: body.status ? "unknown" : undefined, // We don't track previous status
+      },
+    });
+
+    // Log cancellation if status changed to cancelled
+    if (body.status === "cancelled") {
+      await logActivity({
+        type: "order.cancelled",
+        userId: req.auth!.userId,
+        ipAddress: getIpAddress(req),
+        userAgent: getUserAgent(req),
+        metadata: {
+          orderId: (updated as any).id,
+          orderNumber: updated.orderNumber,
+        },
+      });
+    }
+
     res.json({ item: updated.toJSON() });
   }
 );

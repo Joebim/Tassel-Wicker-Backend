@@ -7,6 +7,7 @@ import { optionalAuth } from "../middleware/optionalAuth";
 import { ApiError } from "../middleware/errorHandler";
 import { validateBody } from "../middleware/validate";
 import mongoose from "mongoose";
+import { logActivity, getIpAddress, getUserAgent } from "../services/activityLogger";
 
 export const cartRouter = Router();
 
@@ -146,6 +147,20 @@ cartRouter.post(
 
     await cart.save();
 
+    // Log cart item added
+    await logActivity({
+      type: "cart.item_added",
+      userId: req.auth.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        productId: item.productId,
+        productName: item.name,
+        quantity: existingItemIndex >= 0 ? cart.items[existingItemIndex].quantity : item.quantity,
+        price: item.price,
+      },
+    });
+
     res.json({
       cart: cart.toJSON(),
       item: {
@@ -189,6 +204,34 @@ cartRouter.put(
 
     await cart.save();
 
+    const item = cart.items[itemIndex];
+
+    // Log cart item updated or removed (if quantity is 0)
+    if (quantity === 0) {
+      await logActivity({
+        type: "cart.item_removed",
+        userId: req.auth.userId,
+        ipAddress: getIpAddress(req),
+        userAgent: getUserAgent(req),
+        metadata: {
+          productId: item.productId,
+          productName: item.name,
+        },
+      });
+    } else {
+      await logActivity({
+        type: "cart.item_updated",
+        userId: req.auth.userId,
+        ipAddress: getIpAddress(req),
+        userAgent: getUserAgent(req),
+        metadata: {
+          productId: item.productId,
+          productName: item.name,
+          quantity,
+        },
+      });
+    }
+
     res.json({
       cart: cart.toJSON(),
       item: {
@@ -231,6 +274,14 @@ cartRouter.delete("/", requireAuth, async (req, res) => {
   const cart = await getOrCreateCart(req.auth.userId);
   cart.items = [];
   await cart.save();
+
+  // Log cart cleared
+  await logActivity({
+    type: "cart.cleared",
+    userId: req.auth.userId,
+    ipAddress: getIpAddress(req),
+    userAgent: getUserAgent(req),
+  });
 
   res.json({ cart: cart.toJSON() });
 });

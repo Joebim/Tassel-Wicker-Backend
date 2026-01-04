@@ -7,6 +7,7 @@ import { legacyNextApiRouter } from "./legacyNextApi";
 import { uploadsRouter } from "./uploads";
 import { cartRouter } from "./cart";
 import { contentRouter } from "./content";
+import { activitiesRouter } from "./activities";
 
 export const apiRouter = Router();
 
@@ -21,5 +22,6 @@ apiRouter.use("/orders", ordersRouter);
 apiRouter.use("/uploads", uploadsRouter);
 apiRouter.use("/cart", cartRouter);
 apiRouter.use("/content", contentRouter);
+apiRouter.use("/activities", activitiesRouter);
 // Compatibility routes mirroring existing Next `/api/*` endpoints
 apiRouter.use("/", legacyNextApiRouter);
