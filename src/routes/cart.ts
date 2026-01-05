@@ -7,7 +7,11 @@ import { optionalAuth } from "../middleware/optionalAuth";
 import { ApiError } from "../middleware/errorHandler";
 import { validateBody } from "../middleware/validate";
 import mongoose from "mongoose";
-import { logActivity, getIpAddress, getUserAgent } from "../services/activityLogger";
+import {
+  logActivity,
+  getIpAddress,
+  getUserAgent,
+} from "../services/activityLogger";
 
 export const cartRouter = Router();
 
@@ -54,12 +58,161 @@ async function validateProduct(productId: string) {
   return product;
 }
 
+// Helper to populate basket item images from linked products
+async function populateBasketItemImages(cart: any): Promise<boolean> {
+  // Get all unique product IDs from cart items
+  // Process all items, not just those with existing basketItems
+  const productIds = cart.items
+    .map((item: CartItem) => {
+      try {
+        return new mongoose.Types.ObjectId(item.productId);
+      } catch {
+        return null;
+      }
+    })
+    .filter(
+      (id: mongoose.Types.ObjectId | null): id is mongoose.Types.ObjectId =>
+        id !== null
+    );
+
+  if (productIds.length === 0) return false;
+
+  // Fetch all products with their linked product IDs
+  const products = await ProductModel.find({ _id: { $in: productIds } });
+
+  // Get all linked product IDs
+  const linkedProductIds = products
+    .flatMap((p) => p.linkedProductIds || [])
+    .filter((id): id is mongoose.Types.ObjectId => id !== null);
+
+  if (linkedProductIds.length === 0) return false;
+
+  let wasModified = false;
+
+  // Fetch all linked products
+  const linkedProducts = await ProductModel.find({
+    _id: { $in: linkedProductIds },
+  });
+
+  // Create a map of product name/category to product data
+  const productMap = new Map<string, any>();
+  linkedProducts.forEach((p) => {
+    const key1 = `${p.name}`.toLowerCase();
+    const key2 = `${p.category}`.toLowerCase();
+    productMap.set(key1, p);
+    productMap.set(key2, p);
+  });
+
+  // Create a map of main product ID to its linked products
+  const productLinkedMap = new Map<string, any[]>();
+  products.forEach((p) => {
+    const linked = linkedProducts.filter((lp) =>
+      (p.linkedProductIds || []).some(
+        (lid: mongoose.Types.ObjectId) => String(lid) === String(lp._id)
+      )
+    );
+    productLinkedMap.set(String(p._id), linked);
+  });
+
+  // Update cart items with images and populate missing basketItems
+  cart.items.forEach((item: CartItem) => {
+    const linkedProducts = productLinkedMap.get(item.productId) || [];
+
+    if (linkedProducts.length > 0) {
+      // If basketItems is empty or missing, populate from linked products
+      if (!item.basketItems || item.basketItems.length === 0) {
+        item.basketItems = linkedProducts.map((lp: any) => ({
+          name: lp.name,
+          image:
+            lp.coverImage ||
+            (lp.images && lp.images.length > 0 ? lp.images[0] : ""),
+          category: lp.category || "",
+        }));
+        wasModified = true;
+      } else {
+        // Update existing basketItems with images if missing
+        const updatedBasketItems = item.basketItems.map((bi) => {
+          // If image is missing or empty, try to find it from linked products
+          if (!bi.image || bi.image.trim() === "") {
+            const linkedProduct = linkedProducts.find(
+              (lp: any) => lp.name === bi.name || lp.category === bi.category
+            );
+            if (linkedProduct) {
+              const image =
+                linkedProduct.coverImage ||
+                (linkedProduct.images && linkedProduct.images[0]
+                  ? linkedProduct.images[0]
+                  : "");
+              if (image) {
+                wasModified = true;
+                return { ...bi, image };
+              }
+            }
+          }
+          return bi;
+        });
+        item.basketItems = updatedBasketItems;
+      }
+
+      // Handle customItems similarly if product type is custom
+      const product = products.find(
+        (p: any) => String(p._id) === item.productId
+      );
+      if (product && product.productType === "custom") {
+        if (!item.customItems || item.customItems.length === 0) {
+          item.customItems = linkedProducts.map((lp: any) => ({
+            id: String(lp._id),
+            name: lp.name,
+            image:
+              lp.coverImage ||
+              (lp.images && lp.images.length > 0 ? lp.images[0] : ""),
+            price: lp.price || 0,
+          }));
+          wasModified = true;
+        } else {
+          // Update existing customItems with images if missing
+          const updatedCustomItems = item.customItems.map((ci) => {
+            if (!ci.image || ci.image.trim() === "") {
+              const linkedProduct = linkedProducts.find(
+                (lp: any) => String(lp._id) === ci.id || lp.name === ci.name
+              );
+              if (linkedProduct) {
+                const image =
+                  linkedProduct.coverImage ||
+                  (linkedProduct.images && linkedProduct.images[0]
+                    ? linkedProduct.images[0]
+                    : "");
+                if (image) {
+                  wasModified = true;
+                  return { ...ci, image };
+                }
+              }
+            }
+            return ci;
+          });
+          item.customItems = updatedCustomItems;
+        }
+      }
+    }
+  });
+
+  // Return true if we made any changes
+  return wasModified;
+}
+
 // 1. Get User Cart
 cartRouter.get("/", requireAuth, async (req, res) => {
   if (!req.auth?.userId) {
     throw new ApiError(401, "Unauthorized", "Unauthorized");
   }
   const cart = await getOrCreateCart(req.auth.userId);
+
+  // Populate basket item images if missing
+  const wasModified = await populateBasketItemImages(cart);
+  if (wasModified) {
+    await cart.save();
+  }
+
   res.json({ cart: cart.toJSON() });
 });
 
@@ -70,6 +223,13 @@ cartRouter.get("/guest", async (req, res) => {
     throw new ApiError(400, "Missing X-Session-ID header", "BadRequest");
   }
   const cart = await getOrCreateCart(undefined, sessionId);
+
+  // Populate basket item images if missing
+  const wasModified = await populateBasketItemImages(cart);
+  if (wasModified) {
+    await cart.save();
+  }
+
   res.json({ cart: cart.toJSON() });
 });
 
@@ -116,14 +276,145 @@ cartRouter.post(
 
     const { item } = req.body as { item: z.infer<typeof cartItemSchema> };
 
-    // Validate product exists and get current price
-    const product = await validateProduct(item.productId);
+    // Ensure id is set - use productId if id is missing or undefined
+    if (!item.id || item.id === "undefined") {
+      item.id =
+        item.productId + (item.variantName ? `-${item.variantName}` : "");
+    }
 
-    // Use server price as source of truth
-    const serverPrice = product.price;
-    if (item.price !== serverPrice) {
-      // Update price to match server
-      item.price = serverPrice;
+    // Handle custom baskets (productId is "custom")
+    const isCustomBasket = item.productId === "custom";
+
+    let product = null;
+    if (!isCustomBasket) {
+      // Validate product exists and get current price (only for non-custom items)
+      product = await validateProduct(item.productId);
+
+      // Use server price as source of truth
+      const serverPrice = product.price;
+      if (item.price !== serverPrice) {
+        // Update price to match server
+        item.price = serverPrice;
+      }
+    }
+
+    // If product has linked products, populate basketItems/customItems
+    if (
+      !isCustomBasket &&
+      product &&
+      product.linkedProductIds &&
+      product.linkedProductIds.length > 0
+    ) {
+      // Fetch linked products to populate basket items
+      const linkedProducts = await ProductModel.find({
+        _id: { $in: product.linkedProductIds },
+      });
+
+      // If basketItems is empty or not provided, populate from linked products
+      if (!item.basketItems || item.basketItems.length === 0) {
+        item.basketItems = linkedProducts.map((p) => ({
+          name: p.name,
+          image:
+            p.coverImage ||
+            (p.images && p.images.length > 0 ? p.images[0] : ""),
+          category: p.category || "",
+        }));
+      } else {
+        // Update existing basketItems with images if missing
+        item.basketItems = item.basketItems.map((bi) => {
+          // Try to find matching product by name or category
+          const linkedProduct = linkedProducts.find(
+            (p) => p.name === bi.name || p.category === bi.category
+          );
+          if (linkedProduct && (!bi.image || bi.image.trim() === "")) {
+            return {
+              ...bi,
+              image:
+                linkedProduct.coverImage ||
+                (linkedProduct.images && linkedProduct.images[0]
+                  ? linkedProduct.images[0]
+                  : ""),
+            };
+          }
+          return bi;
+        });
+      }
+
+      // If customItems is empty or not provided but product type is custom, populate from linked products
+      if (
+        (!item.customItems || item.customItems.length === 0) &&
+        product.productType === "custom"
+      ) {
+        item.customItems = linkedProducts.map((p) => ({
+          id: String(p._id),
+          name: p.name,
+          image:
+            p.coverImage ||
+            (p.images && p.images.length > 0 ? p.images[0] : ""),
+          price: p.price || 0,
+        }));
+      } else if (item.customItems && item.customItems.length > 0) {
+        // Update existing customItems with images if missing
+        item.customItems = item.customItems.map((ci) => {
+          // Try to find matching product by id or name
+          const linkedProduct = linkedProducts.find(
+            (p) => String(p._id) === ci.id || p.name === ci.name
+          );
+          if (linkedProduct && (!ci.image || ci.image.trim() === "")) {
+            return {
+              ...ci,
+              image:
+                linkedProduct.coverImage ||
+                (linkedProduct.images && linkedProduct.images[0]
+                  ? linkedProduct.images[0]
+                  : ""),
+            };
+          }
+          return ci;
+        });
+      }
+    }
+
+    // For custom baskets, validate and populate images for customItems
+    if (isCustomBasket && item.customItems && item.customItems.length > 0) {
+      // Get all product IDs from customItems
+      const customItemProductIds = item.customItems
+        .map((ci) => {
+          try {
+            return new mongoose.Types.ObjectId(ci.id);
+          } catch {
+            return null;
+          }
+        })
+        .filter(
+          (id: mongoose.Types.ObjectId | null): id is mongoose.Types.ObjectId =>
+            id !== null
+        );
+
+      if (customItemProductIds.length > 0) {
+        // Fetch products to get their images
+        const customProducts = await ProductModel.find({
+          _id: { $in: customItemProductIds },
+        });
+
+        // Update customItems with images from products
+        item.customItems = item.customItems.map((ci) => {
+          const customProduct = customProducts.find(
+            (p) => String(p._id) === ci.id
+          );
+          if (customProduct && (!ci.image || ci.image.trim() === "")) {
+            return {
+              ...ci,
+              image:
+                customProduct.coverImage ||
+                (customProduct.images && customProduct.images.length > 0
+                  ? customProduct.images[0]
+                  : ""),
+            };
+          }
+          return ci;
+        });
+      }
     }
 
     const cart = await getOrCreateCart(req.auth.userId);
@@ -137,9 +428,19 @@ cartRouter.post(
       cart.items[existingItemIndex].quantity += item.quantity;
       cart.items[existingItemIndex].updatedAt = new Date();
     } else {
-      // Add new item
+      // Add new item - ensure all fields are properly set
       cart.items.push({
-        ...item,
+        id: item.id,
+        productId: item.productId,
+        name: item.name,
+        price: item.price,
+        image: item.image,
+        category: item.category,
+        description: item.description || "",
+        quantity: item.quantity,
+        variantName: item.variantName,
+        customItems: item.customItems || [],
+        basketItems: item.basketItems || [],
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -156,7 +457,10 @@ cartRouter.post(
       metadata: {
         productId: item.productId,
         productName: item.name,
-        quantity: existingItemIndex >= 0 ? cart.items[existingItemIndex].quantity : item.quantity,
+        quantity:
+          existingItemIndex >= 0
+            ? cart.items[existingItemIndex].quantity
+            : item.quantity,
         price: item.price,
       },
     });
@@ -329,16 +633,32 @@ cartRouter.post(
       const mergedItems: CartItem[] = [];
       const processedIds = new Set<string>();
 
-      // Add all server items first
+      // Add all server items first, converting to plain objects
       for (const serverItem of serverCart.items) {
-        mergedItems.push({ ...serverItem });
-        processedIds.add(serverItem.id);
+        const itemId = String(serverItem.id);
+        mergedItems.push({
+          id: itemId,
+          productId: serverItem.productId,
+          name: serverItem.name,
+          price: serverItem.price,
+          image: serverItem.image,
+          category: serverItem.category,
+          description: serverItem.description || "",
+          quantity: serverItem.quantity,
+          variantName: serverItem.variantName,
+          customItems: serverItem.customItems || [],
+          basketItems: serverItem.basketItems || [],
+          createdAt: serverItem.createdAt || new Date(),
+          updatedAt: serverItem.updatedAt || new Date(),
+        });
+        processedIds.add(itemId);
       }
 
       // Process local items
       for (const localItem of localCart) {
+        const localItemId = String(localItem.id);
         const existingIndex = mergedItems.findIndex(
-          (i) => i.id === localItem.id
+          (i) => String(i.id) === localItemId
         );
         if (existingIndex >= 0) {
           // Item exists in both - resolve conflict
@@ -357,7 +677,7 @@ cartRouter.post(
 
           if (localQuantity !== serverQuantity) {
             conflicts.push({
-              itemId: localItem.id,
+              itemId: localItemId,
               localQuantity,
               serverQuantity,
               resolution:
@@ -368,15 +688,27 @@ cartRouter.post(
                   : "combined",
             });
           }
-        } else {
+        } else if (!processedIds.has(localItemId)) {
           // New item from local - validate product first
+          // Double check it's not already processed (safety check)
           try {
             await validateProduct(localItem.productId);
             mergedItems.push({
-              ...localItem,
+              id: localItemId,
+              productId: localItem.productId,
+              name: localItem.name,
+              price: localItem.price,
+              image: localItem.image,
+              category: localItem.category,
+              description: localItem.description || "",
+              quantity: localItem.quantity,
+              variantName: localItem.variantName,
+              customItems: localItem.customItems || [],
+              basketItems: localItem.basketItems || [],
               createdAt: new Date(),
               updatedAt: new Date(),
             });
+            processedIds.add(localItemId);
           } catch (error) {
             // Skip invalid products
             if (error instanceof ApiError && error.code === "NotFound") {

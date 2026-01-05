@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { ActivityModel, ActivityType } from "../models/Activity";
+import { UserModel } from "../models/User";
 import { requireAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/requireRole";
 import { ApiError } from "../middleware/errorHandler";
+import mongoose from "mongoose";
 
 export const activitiesRouter = Router();
 
@@ -79,8 +81,45 @@ activitiesRouter.get(
       ActivityModel.countDocuments(filter),
     ]);
 
+    // Get unique user IDs from activities
+    const userIds = activities
+      .map((a) => a.userId)
+      .filter((id): id is string => !!id)
+      .filter((id, index, self) => self.indexOf(id) === index)
+      .filter((id) => mongoose.isValidObjectId(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    // Fetch users in bulk
+    const users = userIds.length > 0 ? await UserModel.find({ _id: { $in: userIds } }) : [];
+    const userMap = new Map<string, any>();
+    users.forEach((user) => {
+      const userJson = user.toJSON();
+      userMap.set(String(user._id), {
+        id: userJson.id,
+        email: userJson.email,
+        firstName: userJson.firstName || null,
+        lastName: userJson.lastName || null,
+        fullName: userJson.firstName && userJson.lastName
+          ? `${userJson.firstName} ${userJson.lastName}`
+          : userJson.firstName || userJson.lastName || null,
+        role: userJson.role,
+      });
+    });
+
+    // Map activities with user information
+    const activitiesWithUsers = activities.map((a) => {
+      const activityJson = a.toJSON() as any;
+      if (activityJson.userId) {
+        const user = userMap.get(activityJson.userId);
+        if (user) {
+          activityJson.user = user;
+        }
+      }
+      return activityJson;
+    });
+
     res.json({
-      activities: activities.map((a) => a.toJSON()),
+      activities: activitiesWithUsers,
       pagination: {
         page,
         limit,
@@ -159,7 +198,27 @@ activitiesRouter.get(
       throw new ApiError(404, "Activity not found", "NotFound");
     }
 
-    res.json(activity.toJSON());
+    const activityJson = activity.toJSON() as any;
+
+    // Add user information if userId exists
+    if (activityJson.userId && mongoose.isValidObjectId(activityJson.userId)) {
+      const user = await UserModel.findById(activityJson.userId);
+      if (user) {
+        const userJson = user.toJSON();
+        activityJson.user = {
+          id: userJson.id,
+          email: userJson.email,
+          firstName: userJson.firstName || null,
+          lastName: userJson.lastName || null,
+          fullName: userJson.firstName && userJson.lastName
+            ? `${userJson.firstName} ${userJson.lastName}`
+            : userJson.firstName || userJson.lastName || null,
+          role: userJson.role,
+        };
+      }
+    }
+
+    res.json(activityJson);
   }
 );
 

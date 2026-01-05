@@ -56,6 +56,14 @@ interface ActivityData {
   id: string; // Activity ID
   type: ActivityType; // Activity type
   userId?: string; // User ID who performed the action (if authenticated)
+  user?: {
+    id: string; // User ID
+    email: string; // User email
+    firstName?: string | null; // User first name
+    lastName?: string | null; // User last name
+    fullName?: string | null; // User full name (firstName + lastName, or firstName, or lastName)
+    role: string; // User role (admin, customer, moderator)
+  }; // User information (populated when userId exists)
   sessionId?: string; // Session ID for guest users
   ipAddress?: string; // IP address of the user
   userAgent?: string; // User agent string
@@ -69,6 +77,7 @@ interface ActivityData {
 The `metadata` field contains context-specific information:
 
 **User Activities:**
+
 ```typescript
 // user.registered
 { email: string, role: string }
@@ -81,6 +90,7 @@ The `metadata` field contains context-specific information:
 ```
 
 **Order Activities:**
+
 ```typescript
 // order.created
 {
@@ -107,6 +117,7 @@ The `metadata` field contains context-specific information:
 ```
 
 **Cart Activities:**
+
 ```typescript
 // cart.item_added, cart.item_updated
 {
@@ -159,6 +170,14 @@ Authorization: Bearer <token>
       "id": "65a1b2c3d4e5f6g7h8i9j0k1",
       "type": "user.login",
       "userId": "65a1b2c3d4e5f6g7h8i9j0k2",
+      "user": {
+        "id": "65a1b2c3d4e5f6g7h8i9j0k2",
+        "email": "user@example.com",
+        "firstName": "John",
+        "lastName": "Doe",
+        "fullName": "John Doe",
+        "role": "customer"
+      },
       "ipAddress": "192.168.1.100",
       "userAgent": "Mozilla/5.0...",
       "metadata": {
@@ -170,6 +189,14 @@ Authorization: Bearer <token>
       "id": "65a1b2c3d4e5f6g7h8i9j0k3",
       "type": "order.created",
       "userId": "65a1b2c3d4e5f6g7h8i9j0k2",
+      "user": {
+        "id": "65a1b2c3d4e5f6g7h8i9j0k2",
+        "email": "user@example.com",
+        "firstName": "John",
+        "lastName": "Doe",
+        "fullName": "John Doe",
+        "role": "customer"
+      },
       "ipAddress": "192.168.1.100",
       "userAgent": "Mozilla/5.0...",
       "metadata": {
@@ -325,6 +352,14 @@ Authorization: Bearer <token>
   "id": "65a1b2c3d4e5f6g7h8i9j0k1",
   "type": "order.created",
   "userId": "65a1b2c3d4e5f6g7h8i9j0k2",
+  "user": {
+    "id": "65a1b2c3d4e5f6g7h8i9j0k2",
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "fullName": "John Doe",
+    "role": "customer"
+  },
   "ipAddress": "192.168.1.100",
   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   "metadata": {
@@ -432,7 +467,11 @@ Activities are automatically logged throughout the application using the `logAct
 **Example Usage:**
 
 ```typescript
-import { logActivity, getIpAddress, getUserAgent } from "../services/activityLogger";
+import {
+  logActivity,
+  getIpAddress,
+  getUserAgent,
+} from "../services/activityLogger";
 
 await logActivity({
   type: "order.created",
@@ -466,12 +505,14 @@ await logActivity({
 Activities are automatically logged in the following routes:
 
 1. **Authentication Routes** (`src/routes/auth.ts`)
+
    - User registration
    - Login (success and failure)
    - Logout
    - Password reset requests and completions
 
 2. **Order Routes** (`src/routes/orders.ts`)
+
    - Order creation
    - Order updates
    - Order cancellations
@@ -528,51 +569,58 @@ Common error codes:
 
 ```typescript
 // Fetch activities with filters
-async function getActivities(filters: {
-  page?: number;
-  limit?: number;
-  type?: string;
-  userId?: string;
-  startDate?: string;
-  endDate?: string;
-}, token: string) {
+async function getActivities(
+  filters: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  token: string
+) {
   const params = new URLSearchParams();
-  if (filters.page) params.append('page', filters.page.toString());
-  if (filters.limit) params.append('limit', filters.limit.toString());
-  if (filters.type) params.append('type', filters.type);
-  if (filters.userId) params.append('userId', filters.userId);
-  if (filters.startDate) params.append('startDate', filters.startDate);
-  if (filters.endDate) params.append('endDate', filters.endDate);
+  if (filters.page) params.append("page", filters.page.toString());
+  if (filters.limit) params.append("limit", filters.limit.toString());
+  if (filters.type) params.append("type", filters.type);
+  if (filters.userId) params.append("userId", filters.userId);
+  if (filters.startDate) params.append("startDate", filters.startDate);
+  if (filters.endDate) params.append("endDate", filters.endDate);
 
   const response = await fetch(`/api/activities?${params.toString()}`, {
     headers: {
-      'Authorization': `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
-  
+
   if (!response.ok) {
-    throw new Error('Failed to fetch activities');
+    throw new Error("Failed to fetch activities");
   }
-  
+
   return response.json();
 }
 
 // Get activity statistics
-async function getActivityStats(token: string, startDate?: string, endDate?: string) {
+async function getActivityStats(
+  token: string,
+  startDate?: string,
+  endDate?: string
+) {
   const params = new URLSearchParams();
-  if (startDate) params.append('startDate', startDate);
-  if (endDate) params.append('endDate', endDate);
+  if (startDate) params.append("startDate", startDate);
+  if (endDate) params.append("endDate", endDate);
 
   const response = await fetch(`/api/activities/stats?${params.toString()}`, {
     headers: {
-      'Authorization': `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
-  
+
   if (!response.ok) {
-    throw new Error('Failed to fetch statistics');
+    throw new Error("Failed to fetch statistics");
   }
-  
+
   return response.json();
 }
 ```
@@ -606,4 +654,3 @@ curl -H "Authorization: Bearer <token>" \
 curl -H "Authorization: Bearer <token>" \
   https://api.example.com/api/activities/65a1b2c3d4e5f6g7h8i9j0k1
 ```
-

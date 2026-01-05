@@ -74,7 +74,18 @@ const cartItemSchema = new Schema<CartItem>(
   },
   { timestamps: true, _id: false }
 );
-applyToJSON(cartItemSchema);
+
+// Don't apply toJSON to cart items since they don't have _id
+// The id field is already a string, so we don't need transformation
+cartItemSchema.set("toJSON", {
+  virtuals: false,
+  versionKey: false,
+  transform(_doc, ret) {
+    // Preserve the id field as-is (it's already a string)
+    // Don't try to convert _id to id since _id doesn't exist
+    return ret;
+  },
+});
 
 const cartSchema = new Schema<CartDoc>(
   {

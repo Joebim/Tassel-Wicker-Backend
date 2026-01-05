@@ -20,7 +20,7 @@ const createPaymentIntentSchema = z.object({
   currency: z.string().optional().default("gbp"),
   items: z.any().optional(),
   metadata: z.record(z.any()).optional(),
-  fxQuoteId: z.string().optional(),
+  fxQuoteId: z.string().nullable().optional(),
 });
 
 legacyNextApiRouter.post(
