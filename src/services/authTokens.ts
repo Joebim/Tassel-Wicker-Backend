@@ -46,12 +46,18 @@ export async function rotateRefreshToken(refreshToken: string) {
   return { userId: String(tokenDoc.userId), newRefreshToken };
 }
 
-export async function revokeRefreshToken(refreshToken: string) {
+export async function revokeRefreshToken(refreshToken: string): Promise<{ userId: string } | null> {
   const tokenHash = sha256(refreshToken);
-  await RefreshTokenModel.updateOne(
-    { tokenHash, revokedAt: { $exists: false } },
-    { $set: { revokedAt: new Date() } }
-  );
+  const tokenDoc = await RefreshTokenModel.findOne({ tokenHash, revokedAt: { $exists: false } });
+  
+  if (!tokenDoc) {
+    return null;
+  }
+
+  tokenDoc.revokedAt = new Date();
+  await tokenDoc.save();
+
+  return { userId: String(tokenDoc.userId) };
 }
 
 
