@@ -12,7 +12,8 @@
     "seed:admin": "tsx scripts/seed-super-admin.ts",
     "seed:content": "tsx scripts/seed-content.ts",
     "seed:about": "tsx scripts/seed-about-page.ts",
-    "seed:categories": "tsx scripts/seed-categories.ts"
+    "seed:categories": "tsx scripts/seed-categories.ts",
+    "push:all": "git push origin main && git push private main"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
