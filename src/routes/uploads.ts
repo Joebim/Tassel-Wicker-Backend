@@ -257,6 +257,7 @@ uploadsRouter.get("/", requireAuth, requireRole("admin"), async (_req, res) => {
     while ((match = sourceRegex.exec(c.content)) !== null) addLink(match[1]);
     while ((match = iframeRegex.exec(c.content)) !== null) addLink(match[1]);
 
+    
     // 2. Parsed JSON check (for About page structure)
     try {
       const data = JSON.parse(c.content);
