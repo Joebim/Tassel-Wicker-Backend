@@ -13,6 +13,7 @@ async function main() {
   printRegisteredRoutes(app);
   const server = http.createServer(app);
 
+  
   server.listen(env.PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`[server] listening on port ${env.PORT} (${env.NODE_ENV})`);
