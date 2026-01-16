@@ -7,6 +7,11 @@ import { requireRole } from "../middleware/requireRole";
 import { ApiError } from "../middleware/errorHandler";
 import { validateBody } from "../middleware/validate";
 import { uploadDocument } from "../services/cloudinary";
+import {
+  logActivity,
+  getIpAddress,
+  getUserAgent,
+} from "../services/activityLogger";
 
 export const contentRouter = Router();
 
@@ -212,6 +217,18 @@ contentRouter.put(
       { upsert: true, new: true }
     );
 
+    // Log content update
+    await logActivity({
+      type: "content.updated",
+      userId: req.auth.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        page,
+        title,
+      },
+    });
+
     res.json(updated.toJSON());
   }
 );
@@ -245,10 +262,22 @@ contentRouter.post(
       throw new ApiError(415, "File must be a PDF", "UnsupportedMediaType");
     }
 
-    // Upload to Cloudinary
     const result = await uploadDocument({
       fileBuffer: file.buffer,
       filename: `${page}-${Date.now()}.pdf`,
+    });
+
+    // Log document upload
+    await logActivity({
+      type: "content.document_uploaded",
+      userId: req.auth.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        page,
+        url: result.url,
+        filename: file.originalname,
+      },
     });
 
     res.json({

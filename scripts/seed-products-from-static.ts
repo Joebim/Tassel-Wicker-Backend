@@ -43,13 +43,20 @@ async function main() {
 
   // 1) Create all "leaf" sub products first (basket items)
   for (const p of subProducts) {
+    const imageUrls = [p.image ?? p.variants?.[0]?.image ?? ""].filter(Boolean);
+    const images = imageUrls.map((url, index) => ({
+      url,
+      isCover: index === 0, // First image is cover
+    }));
+    const coverImage = imageUrls[0] || undefined;
+
     const doc = await ProductModel.create({
       externalId: String(p.id),
       name: p.name,
       description: p.description || "",
       price: Number(p.variants?.[0]?.price ?? p.price ?? 0),
-      images: [p.image ?? p.variants?.[0]?.image ?? ""].filter(Boolean),
-      coverImage: p.image ?? p.variants?.[0]?.image ?? undefined,
+      images,
+      coverImage,
       category: p.category,
       productType: "single",
       productRole: "sub",
@@ -74,13 +81,20 @@ async function main() {
     const externalId = String(p.id);
     const hasChildren = Array.isArray(p.items) && p.items.length > 0;
 
+    const imageUrls = [p.image ?? p.variants?.[0]?.image ?? ""].filter(Boolean);
+    const images = imageUrls.map((url, index) => ({
+      url,
+      isCover: index === 0, // First image is cover
+    }));
+    const coverImage = imageUrls[0] || undefined;
+
     const mainDoc = await ProductModel.create({
       externalId,
       name: p.name,
       description: p.description || "",
       price: Number(p.variants?.[0]?.price ?? p.price ?? 0),
-      images: [p.image ?? p.variants?.[0]?.image ?? ""].filter(Boolean),
-      coverImage: p.image ?? p.variants?.[0]?.image ?? undefined,
+      images,
+      coverImage,
       category: p.category,
       productType: "single",
       productRole: "sub", // These are singles, not main products
@@ -103,15 +117,20 @@ async function main() {
     if (hasChildren) {
       const childIds: any[] = [];
       for (const child of p.items) {
+        const childImageUrls = [child.image ?? child.variants?.[0]?.image ?? ""].filter(Boolean);
+        const childImages = childImageUrls.map((url, index) => ({
+          url,
+          isCover: index === 0, // First image is cover
+        }));
+        const childCoverImage = childImageUrls[0] || undefined;
+
         const childDoc = await ProductModel.create({
           externalId: String(child.id),
           name: child.name,
           description: child.description || "",
           price: Number(child.variants?.[0]?.price ?? child.price ?? 0),
-          images: [child.image ?? child.variants?.[0]?.image ?? ""].filter(
-            Boolean
-          ),
-          coverImage: child.image ?? child.variants?.[0]?.image ?? undefined,
+          images: childImages,
+          coverImage: childCoverImage,
           category: child.category || p.category,
           productType: "single",
           productRole: "sub",
@@ -161,13 +180,20 @@ async function main() {
       .filter(Boolean)
       .map((doc) => doc._id);
 
+    const imageUrls = [p.image || ""].filter(Boolean);
+    const images = imageUrls.map((url, index) => ({
+      url,
+      isCover: index === 0, // First image is cover
+    }));
+    const coverImage = imageUrls[0] || undefined;
+
     const doc = await ProductModel.create({
       externalId: String(p.id),
       name: p.name,
       description: p.description || "",
       price: Number(p.price || 0),
-      images: [p.image || ""].filter(Boolean),
-      coverImage: p.image || undefined,
+      images,
+      coverImage,
       category: p.category,
       productType,
       productRole: "main",

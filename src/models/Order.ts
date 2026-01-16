@@ -63,11 +63,13 @@ export interface OrderDoc {
   orderNumber: string;
   userId?: Types.ObjectId;
   status: OrderStatus;
+  currency: string;
   items: OrderItemDoc[];
   shipping?: ShippingInfoDoc;
   billing?: AddressDoc;
   payment: PaymentInfoDoc;
   totals: TotalsDoc;
+  customerName: string;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -81,10 +83,19 @@ const orderSchema = new Schema<OrderDoc>(
     userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"],
+      enum: [
+        "pending",
+        "confirmed",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+        "refunded",
+      ],
       default: "pending",
       required: true,
     },
+    currency: { type: String, default: "GBP", required: true },
     items: [
       {
         productId: { type: String, required: true },
@@ -124,7 +135,11 @@ const orderSchema = new Schema<OrderDoc>(
     },
     payment: {
       method: { type: String, required: true },
-      status: { type: String, enum: ["pending", "paid", "failed", "refunded"], default: "pending" },
+      status: {
+        type: String,
+        enum: ["pending", "paid", "failed", "refunded"],
+        default: "pending",
+      },
       transactionId: { type: String },
       last4: { type: String },
       brand: { type: String },
@@ -139,6 +154,7 @@ const orderSchema = new Schema<OrderDoc>(
       discount: { type: Number, required: true, min: 0 },
       total: { type: Number, required: true, min: 0 },
     },
+    customerName: { type: String, required: true, default: "Guest" },
     notes: { type: String },
     shippedAt: { type: Date },
     deliveredAt: { type: Date },
@@ -147,8 +163,17 @@ const orderSchema = new Schema<OrderDoc>(
 );
 
 orderSchema.index({ createdAt: -1 });
-applyToJSON(orderSchema);
 
-export const OrderModel = mongoose.models.Order || mongoose.model<OrderDoc>("Order", orderSchema);
+orderSchema.set("toJSON", {
+  virtuals: true,
+  versionKey: false,
+  transform(_doc, ret: any) {
+    ret.id = String(ret._id);
+    ret.orderId = ret.orderNumber;
+    delete ret._id;
+    return ret;
+  },
+});
 
-
+export const OrderModel =
+  mongoose.models.Order || mongoose.model<OrderDoc>("Order", orderSchema);

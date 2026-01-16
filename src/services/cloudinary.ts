@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
+export { cloudinary };
 import { env } from "../config/env";
 
 export function ensureCloudinaryConfigured() {
@@ -128,7 +129,7 @@ export async function uploadMedia(
   ensureCloudinaryConfigured();
 
   const baseFolder = env.CLOUDINARY_FOLDER || "tassel-wicker";
-  
+
   // Determine folder based on resource type if not provided
   let folder = options.folder;
   if (!folder) {

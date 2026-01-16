@@ -2,33 +2,53 @@ import type { RequestHandler } from "express";
 import { env } from "../config/env";
 import { getStripe } from "../services/stripeClient";
 import { sendEmail } from "../services/emailService";
-import { createOrderConfirmationEmailTemplate, createPaymentConfirmationEmailTemplate } from "../services/emailTemplates";
+import {
+  createOrderConfirmationEmailTemplate,
+  createPaymentConfirmationEmailTemplate,
+} from "../services/emailTemplates";
 import { OrderModel } from "../models/Order";
+import { generateOrderNumber } from "../utils/orderNumber";
 
 export const stripeWebhookHandler: RequestHandler = async (req, res) => {
   const signature = req.header("stripe-signature");
   if (!signature || !env.STRIPE_WEBHOOK_SECRET) {
-    return res.status(400).json({ success: false, error: "Missing webhook configuration" });
+    return res
+      .status(400)
+      .json({ success: false, error: "Missing webhook configuration" });
   }
 
   const stripe = getStripe();
   let event: any;
   try {
     // Body is a Buffer (mounted with express.raw)
-    event = stripe.webhooks.constructEvent(req.body, signature, env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      signature,
+      env.STRIPE_WEBHOOK_SECRET
+    );
   } catch (err) {
-    return res.status(400).json({ success: false, error: "Webhook signature verification failed" });
+    return res
+      .status(400)
+      .json({ success: false, error: "Webhook signature verification failed" });
   }
 
   if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object as any;
     const metadata = paymentIntent.metadata || {};
     const items = metadata.items ? JSON.parse(metadata.items) : [];
+    const orderNumber = metadata.orderNumber || generateOrderNumber();
     const customerEmail =
-      paymentIntent.receipt_email || paymentIntent.billing_details?.email || metadata.customerEmail || "";
-    const customerName = metadata.customerName || paymentIntent.billing_details?.name || "Valued Customer";
-    const orderId = paymentIntent.id;
-    const currency = (metadata.currency || paymentIntent.currency || "gbp").toUpperCase();
+      paymentIntent.receipt_email ||
+      paymentIntent.billing_details?.email ||
+      metadata.customerEmail ||
+      "";
+    const customerName =
+      metadata.customerName || paymentIntent.billing_details?.name || "Guest";
+    const currency = (
+      metadata.currency ||
+      paymentIntent.currency ||
+      "gbp"
+    ).toUpperCase();
     const divisor = currency === "JPY" ? 1 : 100;
     const totalAmount = (paymentIntent.amount || 0) / divisor;
 
@@ -50,7 +70,8 @@ export const stripeWebhookHandler: RequestHandler = async (req, res) => {
     }));
 
     const orderDetails = {
-      orderId,
+      orderId: orderNumber,
+      stripePaymentIntentId: paymentIntent.id,
       customerName,
       customerEmail,
       items: orderItems,
@@ -58,18 +79,22 @@ export const stripeWebhookHandler: RequestHandler = async (req, res) => {
       currency,
       shippingAddress,
       paymentMethod: paymentIntent.payment_method_types?.[0] || "card",
-      orderDate: new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" }),
+      orderDate: new Date().toLocaleDateString("en-GB", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
     };
 
     if (customerEmail) {
       await sendEmail({
         to: customerEmail,
-        subject: `Order Confirmation - Order #${orderId.substring(3, 13)}`,
+        subject: `Order Confirmation - Order #${orderNumber}`,
         html: createOrderConfirmationEmailTemplate(orderDetails),
       });
       await sendEmail({
         to: customerEmail,
-        subject: `Payment Confirmation - Order #${orderId.substring(3, 13)}`,
+        subject: `Payment Confirmation - Order #${orderNumber}`,
         html: createPaymentConfirmationEmailTemplate(orderDetails),
       });
     }
@@ -78,8 +103,10 @@ export const stripeWebhookHandler: RequestHandler = async (req, res) => {
     if (adminEmail) {
       await sendEmail({
         to: adminEmail,
-        subject: `New Order Received - Order #${orderId.substring(3, 13)}`,
-        html: `<h2>New Order Received</h2><p><strong>Order ID:</strong> ${orderId}</p><p><strong>Customer:</strong> ${customerName} (${customerEmail || "No email"})</p><p><strong>Total:</strong> ${currency} ${totalAmount.toFixed(
+        subject: `New Order Received - Order #${orderNumber}`,
+        html: `<h2>New Order Received</h2><p><strong>Order ID:</strong> ${orderNumber}</p><p><strong>Customer:</strong> ${customerName} (${
+          customerEmail || "No email"
+        })</p><p><strong>Total:</strong> ${currency} ${totalAmount.toFixed(
           2
         )}</p><p><strong>Items:</strong> ${orderItems.length}</p>`,
       });
@@ -90,8 +117,9 @@ export const stripeWebhookHandler: RequestHandler = async (req, res) => {
       { "payment.stripePaymentIntentId": paymentIntent.id },
       {
         $setOnInsert: {
-          orderNumber: `PI-${paymentIntent.id}`,
-          status: "confirmed",
+          orderNumber: orderNumber,
+          customerName: customerName,
+          currency: currency,
           items: (items || []).map((it: any) => ({
             productId: it.id || "unknown",
             productName: it.name || "Unknown Item",
@@ -100,7 +128,13 @@ export const stripeWebhookHandler: RequestHandler = async (req, res) => {
             quantity: it.quantity || 1,
             total: (it.price || 0) * (it.quantity || 1),
           })),
-          totals: { subtotal: totalAmount, shipping: 0, tax: 0, discount: 0, total: totalAmount },
+          totals: {
+            subtotal: totalAmount,
+            shipping: 0,
+            tax: 0,
+            discount: 0,
+            total: totalAmount,
+          },
         },
         $set: {
           status: "confirmed",
@@ -113,10 +147,12 @@ export const stripeWebhookHandler: RequestHandler = async (req, res) => {
       { upsert: true }
     );
 
-    return res.json({ success: true, message: "Event processed", orderId });
+    return res.json({
+      success: true,
+      message: "Event processed",
+      orderId: orderNumber,
+    });
   }
 
   return res.json({ success: true, message: `Event ${event.type} received` });
 };
-
-

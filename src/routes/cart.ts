@@ -201,6 +201,20 @@ async function populateBasketItemImages(cart: any): Promise<boolean> {
 }
 
 // 1. Get User Cart
+/**
+ * @openapi
+ * /api/cart:
+ *   get:
+ *     tags: [Cart]
+ *     summary: Get current authenticated user's cart
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Cart retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
 cartRouter.get("/", requireAuth, async (req, res) => {
   if (!req.auth?.userId) {
     throw new ApiError(401, "Unauthorized", "Unauthorized");
@@ -479,6 +493,37 @@ cartRouter.post(
 );
 
 // 4. Update Item Quantity
+/**
+ * @openapi
+ * /api/cart/items/{itemId}:
+ *   put:
+ *     tags: [Cart]
+ *     summary: Update cart item quantity
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [quantity]
+ *             properties:
+ *               quantity:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Set to 0 to remove item
+ *     responses:
+ *       200:
+ *         description: Cart item updated
+ *       404:
+ *         description: Item not found in cart
+ */
 cartRouter.put(
   "/items/:itemId",
   requireAuth,
@@ -547,6 +592,25 @@ cartRouter.put(
 );
 
 // 5. Remove Item from Cart
+/**
+ * @openapi
+ * /api/cart/items/{itemId}:
+ *   delete:
+ *     tags: [Cart]
+ *     summary: Remove item from cart
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Item removed from cart
+ *       404:
+ *         description: Item not found in cart
+ */
 cartRouter.delete("/items/:itemId", requireAuth, async (req, res) => {
   if (!req.auth?.userId) {
     throw new ApiError(401, "Unauthorized", "Unauthorized");
@@ -690,9 +754,10 @@ cartRouter.post(
           }
         } else if (!processedIds.has(localItemId)) {
           // New item from local - validate product first
-          // Double check it's not already processed (safety check)
           try {
-            await validateProduct(localItem.productId);
+            if (localItem.productId !== "custom") {
+              await validateProduct(localItem.productId);
+            }
             mergedItems.push({
               id: localItemId,
               productId: localItem.productId,
@@ -758,7 +823,9 @@ cartRouter.post(
     for (const guestItem of guestCart) {
       try {
         // Validate product
-        await validateProduct(guestItem.productId);
+        if (guestItem.productId !== "custom") {
+          await validateProduct(guestItem.productId);
+        }
 
         const existingIndex = userCart.items.findIndex(
           (i: CartItem) => i.id === guestItem.id

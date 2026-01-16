@@ -7,6 +7,11 @@ import { ApiError } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/requireRole";
 import { slugify } from "../utils/slugify";
+import {
+  logActivity,
+  getIpAddress,
+  getUserAgent,
+} from "../services/activityLogger";
 
 export const categoriesRouter = Router();
 
@@ -17,7 +22,8 @@ categoriesRouter.get("/", async (_req, res) => {
 
 categoriesRouter.get("/:id", async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid id", "BadRequest");
+  if (!mongoose.isValidObjectId(id))
+    throw new ApiError(400, "Invalid id", "BadRequest");
   const category = await CategoryModel.findById(id);
   if (!category) throw new ApiError(404, "Category not found", "NotFound");
   res.json({ item: category.toJSON() });
@@ -37,13 +43,28 @@ categoriesRouter.post(
   validateBody(upsertCategorySchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof upsertCategorySchema>;
-    const slug = (body.slug ? slugify(body.slug) : slugify(body.name)) || slugify(body.name);
+    const slug =
+      (body.slug ? slugify(body.slug) : slugify(body.name)) ||
+      slugify(body.name);
     const created = await CategoryModel.create({
       name: body.name,
       slug,
       description: body.description,
       image: body.image,
     });
+
+    // Log category creation
+    await logActivity({
+      type: "category.created",
+      userId: req.auth!.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        categoryId: (created as any).id,
+        name: created.name,
+      },
+    });
+
     res.status(201).json({ item: created.toJSON() });
   }
 );
@@ -55,15 +76,31 @@ categoriesRouter.put(
   validateBody(upsertCategorySchema.partial()),
   async (req, res) => {
     const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid id", "BadRequest");
+    if (!mongoose.isValidObjectId(id))
+      throw new ApiError(400, "Invalid id", "BadRequest");
 
     const body = req.body as Partial<z.infer<typeof upsertCategorySchema>>;
     const update: any = { ...body };
     if (body.slug) update.slug = slugify(body.slug);
     if (body.name && !body.slug) update.slug = slugify(body.name);
 
-    const updated = await CategoryModel.findByIdAndUpdate(id, update, { new: true });
+    const updated = await CategoryModel.findByIdAndUpdate(id, update, {
+      new: true,
+    });
     if (!updated) throw new ApiError(404, "Category not found", "NotFound");
+
+    // Log category update
+    await logActivity({
+      type: "category.updated",
+      userId: req.auth!.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        categoryId: (updated as any).id,
+        name: updated.name,
+      },
+    });
+
     res.json({ item: updated.toJSON() });
   }
 );
@@ -74,11 +111,23 @@ categoriesRouter.delete(
   requireRole("admin"),
   async (req, res) => {
     const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Invalid id", "BadRequest");
+    if (!mongoose.isValidObjectId(id))
+      throw new ApiError(400, "Invalid id", "BadRequest");
     const deleted = await CategoryModel.findByIdAndDelete(id);
     if (!deleted) throw new ApiError(404, "Category not found", "NotFound");
+
+    // Log category deletion
+    await logActivity({
+      type: "category.deleted",
+      userId: req.auth!.userId,
+      ipAddress: getIpAddress(req),
+      userAgent: getUserAgent(req),
+      metadata: {
+        categoryId: id,
+        name: deleted.name,
+      },
+    });
+
     res.json({ success: true });
   }
 );
-
-

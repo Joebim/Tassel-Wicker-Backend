@@ -124,8 +124,27 @@ export function createContactFormEmailTemplate(formData: {
   return getBaseEmailTemplate(content, "New Contact Form Submission");
 }
 
-export function createOrderConfirmationEmailTemplate(order: OrderDetails): string {
-  const formatPrice = (amount: number): string => `£${amount.toFixed(2)}`;
+export function createOrderConfirmationEmailTemplate(
+  order: OrderDetails
+): string {
+  const getCurrencySymbol = (code: string) => {
+    const symbols: Record<string, string> = {
+      GBP: "£",
+      USD: "$",
+      EUR: "€",
+      CAD: "C$",
+      AUD: "A$",
+      JPY: "¥",
+      NGN: "₦",
+    };
+    return symbols[code.toUpperCase()] || code.toUpperCase();
+  };
+
+  const formatPrice = (amount: number): string =>
+    `${getCurrencySymbol(order.currency)}${amount.toLocaleString("en-GB", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   const capitalizedName = order.customerName
     ? order.customerName.charAt(0).toUpperCase() + order.customerName.slice(1)
     : "Valued Customer";
@@ -239,8 +258,27 @@ export function createOrderConfirmationEmailTemplate(order: OrderDetails): strin
   return getBaseEmailTemplate(content, "Order Confirmation");
 }
 
-export function createPaymentConfirmationEmailTemplate(order: OrderDetails): string {
-  const formatPrice = (amount: number): string => `£${amount.toFixed(2)}`;
+export function createPaymentConfirmationEmailTemplate(
+  order: OrderDetails
+): string {
+  const getCurrencySymbol = (code: string) => {
+    const symbols: Record<string, string> = {
+      GBP: "£",
+      USD: "$",
+      EUR: "€",
+      CAD: "C$",
+      AUD: "A$",
+      JPY: "¥",
+      NGN: "₦",
+    };
+    return symbols[code.toUpperCase()] || code.toUpperCase();
+  };
+
+  const formatPrice = (amount: number): string =>
+    `${getCurrencySymbol(order.currency)}${amount.toLocaleString("en-GB", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   const capitalizedName = order.customerName
     ? order.customerName.charAt(0).toUpperCase() + order.customerName.slice(1)
     : "Valued Customer";
@@ -250,7 +288,9 @@ export function createPaymentConfirmationEmailTemplate(order: OrderDetails): str
         Dear ${capitalizedName},
     </p>
     <p style="margin: 0 0 30px; color: #1a1a1a; font-size: 16px; font-weight: 200; line-height: 1.6; font-family: 'Balgin', 'Mathilda', system-ui, sans-serif;">
-        We are pleased to confirm that your payment of <strong>${formatPrice(order.totalAmount)}</strong> has been successfully processed.
+        We are pleased to confirm that your payment of <strong>${formatPrice(
+          order.totalAmount
+        )}</strong> has been successfully processed.
     </p>
     <div style="margin-bottom: 30px; padding: 20px; background-color: #f0f9f0; border-left: 3px solid #4c062c;">
         <p style="margin: 0; color: #1a1a1a; font-size: 16px; font-weight: 200; line-height: 1.6;">
@@ -269,5 +309,3 @@ export function createPaymentConfirmationEmailTemplate(order: OrderDetails): str
 
   return getBaseEmailTemplate(content, "Payment Confirmation");
 }
-
-

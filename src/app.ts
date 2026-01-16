@@ -13,6 +13,7 @@ import { requestId } from "./middleware/requestId";
 import { requestLogger } from "./middleware/requestLogger";
 import { apiRouter } from "./routes";
 import { stripeWebhookHandler } from "./routes/stripeWebhook";
+import { setupSwagger } from "./swagger";
 
 export function createApp() {
   const app = express();
@@ -24,6 +25,9 @@ export function createApp() {
   app.use(compression());
   app.use(cookieParser());
   app.use(rateLimiter());
+
+  // Setup Swagger API Documentation
+  setupSwagger(app);
 
   // Stripe webhooks need raw body (must be mounted BEFORE express.json()).
   app.post(

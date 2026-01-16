@@ -12,24 +12,12 @@ export function requestLogger(): RequestHandler {
 
       // eslint-disable-next-line no-console
       console.log(
-        `[http] ${req.method} ${path} -> ${res.statusCode} (${ms.toFixed(1)}ms)${requestId ? ` rid=${requestId}` : ""}`
+        `[http] ${req.method} ${path} -> ${res.statusCode} (${ms.toFixed(
+          1
+        )}ms)${requestId ? ` rid=${requestId}` : ""}`
       );
     });
 
     next();
   };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

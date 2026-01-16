@@ -8,6 +8,8 @@ export type ActivityType =
   | "user.logout"
   | "user.password_reset_requested"
   | "user.password_reset"
+  | "user.updated"
+  | "user.deleted"
   | "order.created"
   | "order.updated"
   | "order.cancelled"
@@ -19,10 +21,15 @@ export type ActivityType =
   | "product.created"
   | "product.updated"
   | "product.deleted"
+  | "product.image_uploaded"
   | "content.updated"
+  | "content.document_uploaded"
   | "category.created"
   | "category.updated"
-  | "category.deleted";
+  | "category.deleted"
+  | "upload.product_image"
+  | "upload.media"
+  | "upload.deleted";
 
 export interface ActivityDoc {
   type: ActivityType;
@@ -45,6 +52,8 @@ const activitySchema = new Schema<ActivityDoc>(
         "user.logout",
         "user.password_reset_requested",
         "user.password_reset",
+        "user.updated",
+        "user.deleted",
         "order.created",
         "order.updated",
         "order.cancelled",
@@ -56,10 +65,15 @@ const activitySchema = new Schema<ActivityDoc>(
         "product.created",
         "product.updated",
         "product.deleted",
+        "product.image_uploaded",
         "content.updated",
+        "content.document_uploaded",
         "category.created",
         "category.updated",
         "category.deleted",
+        "upload.product_image",
+        "upload.media",
+        "upload.deleted",
       ],
       required: true,
       index: true,
@@ -70,7 +84,10 @@ const activitySchema = new Schema<ActivityDoc>(
     userAgent: { type: String },
     metadata: { type: Schema.Types.Mixed, default: {} },
   },
-  { timestamps: { createdAt: true, updatedAt: false }, suppressReservedKeysWarning: true }
+  {
+    timestamps: { createdAt: true, updatedAt: false },
+    suppressReservedKeysWarning: true,
+  }
 );
 
 // Indexes for efficient querying
@@ -83,5 +100,5 @@ activitySchema.index({ "metadata.productId": 1 });
 applyToJSON(activitySchema);
 
 export const ActivityModel =
-  mongoose.models.Activity || mongoose.model<ActivityDoc>("Activity", activitySchema);
-
+  mongoose.models.Activity ||
+  mongoose.model<ActivityDoc>("Activity", activitySchema);
