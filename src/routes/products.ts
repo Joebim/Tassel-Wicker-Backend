@@ -26,7 +26,7 @@ const upload = multer({
  * /api/products:
  *   get:
  *     tags: [Products]
- *     summary: List all products
+ *     summary: List all products with advanced filtering
  *     parameters:
  *       - in: query
  *         name: page
@@ -40,6 +40,35 @@ const upload = multer({
  *       - in: query
  *         name: categoryId
  *         schema: { type: string }
+ *       - in: query
+ *         name: category
+ *         schema: { type: string }
+ *       - in: query
+ *         name: minPrice
+ *         schema: { type: number }
+ *       - in: query
+ *         name: maxPrice
+ *         schema: { type: number }
+ *       - in: query
+ *         name: tags
+ *         schema: { type: string }
+ *         description: Comma separated tags
+ *       - in: query
+ *         name: sort
+ *         schema: { type: string }
+ *         description: Sort option (price_asc, price_desc, name_asc, name_desc, newest, oldest)
+ *       - in: query
+ *         name: type
+ *         schema: { type: string }
+ *       - in: query
+ *         name: role
+ *         schema: { type: string }
+ *       - in: query
+ *         name: featured
+ *         schema: { type: boolean }
+ *       - in: query
+ *         name: inStock
+ *         schema: { type: boolean }
  *     responses:
  *       200:
  *         description: List of products returned
@@ -50,6 +79,9 @@ const upload = multer({
  *               properties:
  *                 items: { type: array, items: { $ref: '#/components/schemas/Product' } }
  *                 total: { type: integer }
+ *                 page: { type: integer }
+ *                 limit: { type: integer }
+ *                 totalPages: { type: integer }
  */
 productsRouter.get("/", async (req, res) => {
   const page = Math.max(1, Number(req.query.page || 1) || 1);
@@ -58,6 +90,10 @@ productsRouter.get("/", async (req, res) => {
     typeof req.query.search === "string" ? req.query.search.trim() : "";
   const categoryId =
     typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
+  const categoryName =
+    typeof req.query.category === "string"
+      ? req.query.category.trim()
+      : undefined;
   const productType =
     typeof req.query.type === "string" ? req.query.type : undefined;
   const productRole =
@@ -71,21 +107,82 @@ productsRouter.get("/", async (req, res) => {
       ? req.query.inStock === "true"
       : undefined;
 
+  // New filters
+  const minPrice = req.query.minPrice ? Number(req.query.minPrice) : undefined;
+  const maxPrice = req.query.maxPrice ? Number(req.query.maxPrice) : undefined;
+  const tags =
+    typeof req.query.tags === "string"
+      ? req.query.tags.split(",").map((t) => t.trim())
+      : undefined;
+  const sort = typeof req.query.sort === "string" ? req.query.sort : undefined;
+
   const filter: any = {};
   if (productType) filter.productType = productType;
   if (productRole) filter.productRole = productRole;
   if (featured !== undefined) filter.featured = featured;
   if (inStock !== undefined) filter.inStock = inStock;
+
   if (categoryId) {
     if (!mongoose.isValidObjectId(categoryId))
       throw new ApiError(400, "Invalid categoryId", "BadRequest");
     filter.categoryId = categoryId;
   }
+
+  // Filter by category name (case-insensitive regex if desired, or exact match)
+  // Using exact match for now to align with typical keyword filtering, or strict categorization
+  if (categoryName) {
+    filter.category = categoryName;
+  }
+
+  if (minPrice !== undefined || maxPrice !== undefined) {
+    filter.price = {};
+    if (minPrice !== undefined && !isNaN(minPrice))
+      filter.price.$gte = minPrice;
+    if (maxPrice !== undefined && !isNaN(maxPrice))
+      filter.price.$lte = maxPrice;
+    // Clean up empty price object if NaNs were passed
+    if (Object.keys(filter.price).length === 0) delete filter.price;
+  }
+
+  if (tags && tags.length > 0) {
+    filter.tags = { $in: tags };
+  }
+
   if (search) filter.$text = { $search: search };
+
+  // Determine sort order
+  let sortOption: any = { createdAt: -1 }; // Default to newest
+  if (search && !sort) {
+    // If searching and no specific sort requested, prioritize relevance
+    sortOption = { score: { $meta: "textScore" } };
+  } else if (sort) {
+    switch (sort) {
+      case "price_asc":
+        sortOption = { price: 1 };
+        break;
+      case "price_desc":
+        sortOption = { price: -1 };
+        break;
+      case "name_asc":
+        sortOption = { name: 1 };
+        break;
+      case "name_desc":
+        sortOption = { name: -1 };
+        break;
+      case "newest":
+        sortOption = { createdAt: -1 };
+        break;
+      case "oldest":
+        sortOption = { createdAt: 1 };
+        break;
+      default:
+        sortOption = { createdAt: -1 };
+    }
+  }
 
   const [items, total] = await Promise.all([
     ProductModel.find(filter)
-      .sort(search ? { score: { $meta: "textScore" } } : { createdAt: -1 })
+      .sort(sortOption)
       .skip((page - 1) * limit)
       .limit(limit),
     ProductModel.countDocuments(filter),
@@ -182,7 +279,7 @@ const productSchema = z.object({
         name: z.string().min(1),
         image: z.string().min(1),
         price: z.number().nonnegative(),
-      })
+      }),
     )
     .optional(),
   details: z.any().optional(),
@@ -243,7 +340,7 @@ productsRouter.post(
         throw new ApiError(
           400,
           "Only one image can be set as cover",
-          "BadRequest"
+          "BadRequest",
         );
       }
 
@@ -293,7 +390,7 @@ productsRouter.post(
     });
 
     res.status(201).json({ item: created.toJSON() });
-  }
+  },
 );
 
 /**
@@ -512,13 +609,13 @@ productsRouter.put(
     // If images are being updated, ensure only one image has isCover: true
     if (body.images && Array.isArray(body.images)) {
       const coverCount = body.images.filter(
-        (img) => img.isCover === true
+        (img) => img.isCover === true,
       ).length;
       if (coverCount > 1) {
         throw new ApiError(
           400,
           "Only one image can be set as cover",
-          "BadRequest"
+          "BadRequest",
         );
       }
 
@@ -550,7 +647,7 @@ productsRouter.put(
     });
 
     res.json({ item: updated.toJSON() });
-  }
+  },
 );
 
 /**
@@ -596,7 +693,7 @@ productsRouter.delete(
     });
 
     res.json({ success: true });
-  }
+  },
 );
 
 /**
@@ -685,5 +782,5 @@ productsRouter.post(
     });
 
     res.json({ item: updated.toJSON(), upload: uploaded });
-  }
+  },
 );

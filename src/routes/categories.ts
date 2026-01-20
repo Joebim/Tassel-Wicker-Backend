@@ -15,11 +15,54 @@ import {
 
 export const categoriesRouter = Router();
 
+/**
+ * @openapi
+ * /api/categories:
+ *   get:
+ *     tags: [Categories]
+ *     summary: List all categories
+ *     description: Retrieve a list of all product categories, sorted by name.
+ *     responses:
+ *       200:
+ *         description: List of categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Category'
+ */
 categoriesRouter.get("/", async (_req, res) => {
   const categories = await CategoryModel.find().sort({ name: 1 });
   res.json({ items: categories.map((c) => c.toJSON()) });
 });
 
+/**
+ * @openapi
+ * /api/categories/{id}:
+ *   get:
+ *     tags: [Categories]
+ *     summary: Get category by ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Category details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 item: { $ref: '#/components/schemas/Category' }
+ *       404:
+ *         description: Category not found
+ */
 categoriesRouter.get("/:id", async (req, res) => {
   const { id } = req.params;
   if (!mongoose.isValidObjectId(id))
@@ -66,7 +109,7 @@ categoriesRouter.post(
     });
 
     res.status(201).json({ item: created.toJSON() });
-  }
+  },
 );
 
 categoriesRouter.put(
@@ -102,7 +145,7 @@ categoriesRouter.put(
     });
 
     res.json({ item: updated.toJSON() });
-  }
+  },
 );
 
 categoriesRouter.delete(
@@ -129,5 +172,5 @@ categoriesRouter.delete(
     });
 
     res.json({ success: true });
-  }
+  },
 );

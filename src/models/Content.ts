@@ -7,7 +7,10 @@ export type ContentPage =
   | "privacy-policy"
   | "terms-of-service"
   | "returns"
-  | "shipping";
+  | "shipping"
+  | "shop"
+  | "corporate-bespoke"
+  | "contact";
 
 export interface ContentDoc {
   id: string; // Content ID (same as page identifier)
@@ -32,6 +35,9 @@ const contentSchema = new Schema<ContentDoc>(
         "terms-of-service",
         "returns",
         "shipping",
+        "shop",
+        "corporate-bespoke",
+        "contact",
       ],
       required: true,
       index: true,
@@ -41,7 +47,7 @@ const contentSchema = new Schema<ContentDoc>(
     documentUrl: { type: String },
     updatedBy: { type: String, required: true },
   },
-  { timestamps: true, suppressReservedKeysWarning: true }
+  { timestamps: true, suppressReservedKeysWarning: true },
 );
 
 // Indexes
@@ -54,4 +60,3 @@ applyToJSON(contentSchema);
 export const ContentModel =
   mongoose.models.Content ||
   mongoose.model<ContentDoc>("Content", contentSchema);
-

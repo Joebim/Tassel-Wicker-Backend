@@ -27,6 +27,9 @@ const VALID_PAGES: ContentPage[] = [
   "terms-of-service",
   "returns",
   "shipping",
+  "shop",
+  "corporate-bespoke",
+  "contact",
 ];
 
 const PAGE_TITLES: Record<ContentPage, string> = {
@@ -36,6 +39,9 @@ const PAGE_TITLES: Record<ContentPage, string> = {
   "terms-of-service": "Terms of Service",
   returns: "Returns & Exchanges",
   shipping: "Shipping Information",
+  shop: "Shop Page",
+  "corporate-bespoke": "Corporate & Bespoke Service",
+  contact: "Contact Page",
 };
 
 // Helper to validate page
@@ -44,7 +50,7 @@ function validatePage(page: string): ContentPage {
     throw new ApiError(
       400,
       `Invalid page. Must be one of: ${VALID_PAGES.join(", ")}`,
-      "InvalidPage"
+      "InvalidPage",
     );
   }
   return page as ContentPage;
@@ -74,7 +80,7 @@ function validateAboutContent(content: string): void {
         throw new ApiError(
           400,
           `Invalid About content: missing field '${field}'`,
-          "InvalidContentFormat"
+          "InvalidContentFormat",
         );
       }
       // Validate string fields
@@ -82,7 +88,7 @@ function validateAboutContent(content: string): void {
         throw new ApiError(
           400,
           `Invalid About content: field '${field}' must be a string`,
-          "InvalidContentFormat"
+          "InvalidContentFormat",
         );
       }
       // Validate videos array
@@ -90,7 +96,7 @@ function validateAboutContent(content: string): void {
         throw new ApiError(
           400,
           `Invalid About content: field '${field}' must be an array`,
-          "InvalidContentFormat"
+          "InvalidContentFormat",
         );
       }
     }
@@ -99,7 +105,177 @@ function validateAboutContent(content: string): void {
     throw new ApiError(
       400,
       "Invalid About content: must be valid JSON",
-      "InvalidContentFormat"
+      "InvalidContentFormat",
+    );
+  }
+}
+
+// Helper to validate Shop page content structure
+function validateShopContent(content: string): void {
+  try {
+    const parsed = JSON.parse(content);
+    const requiredFields = [
+      "headerImage",
+      "introText",
+      "secondaryIntroTextMobile",
+      "secondaryIntroTextDesktop",
+      "scrollVelocityText",
+    ];
+    for (const field of requiredFields) {
+      if (!(field in parsed)) {
+        throw new ApiError(
+          400,
+          `Invalid Shop content: missing field '${field}'`,
+          "InvalidContentFormat",
+        );
+      }
+      if (typeof parsed[field] !== "string") {
+        throw new ApiError(
+          400,
+          `Invalid Shop content: field '${field}' must be a string`,
+          "InvalidContentFormat",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      400,
+      "Invalid Shop content: must be valid JSON",
+      "InvalidContentFormat",
+    );
+  }
+}
+
+// Helper to validate Corporate & Bespoke page content structure
+function validateCorporateBespokeContent(content: string): void {
+  try {
+    const parsed = JSON.parse(content);
+    const requiredFields = [
+      "headerImageDesktop",
+      "headerImageMobile",
+      "descriptionText",
+    ];
+    for (const field of requiredFields) {
+      if (!(field in parsed)) {
+        throw new ApiError(
+          400,
+          `Invalid Corporate & Bespoke content: missing field '${field}'`,
+          "InvalidContentFormat",
+        );
+      }
+      if (typeof parsed[field] !== "string") {
+        throw new ApiError(
+          400,
+          `Invalid Corporate & Bespoke content: field '${field}' must be a string`,
+          "InvalidContentFormat",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      400,
+      "Invalid Corporate & Bespoke content: must be valid JSON",
+      "InvalidContentFormat",
+    );
+  }
+}
+
+// Helper to validate Contact page content structure
+function validateContactContent(content: string): void {
+  try {
+    const parsed = JSON.parse(content);
+    const requiredFields = ["headerImage", "title", "subTitle"];
+    for (const field of requiredFields) {
+      if (!(field in parsed)) {
+        throw new ApiError(
+          400,
+          `Invalid Contact content: missing field '${field}'`,
+          "InvalidContentFormat",
+        );
+      }
+      if (typeof parsed[field] !== "string") {
+        throw new ApiError(
+          400,
+          `Invalid Contact content: field '${field}' must be a string`,
+          "InvalidContentFormat",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      400,
+      "Invalid Contact content: must be valid JSON",
+      "InvalidContentFormat",
+    );
+  }
+}
+
+// Helper to validate generic policy page content structure (Privacy, Cookie, Returns, Shipping)
+function validatePolicyPageContent(content: string, pageName: string): void {
+  try {
+    const parsed = JSON.parse(content);
+    const requiredFields = ["headerImage", "title1", "title2"];
+    for (const field of requiredFields) {
+      if (!(field in parsed)) {
+        throw new ApiError(
+          400,
+          `Invalid ${pageName} content: missing field '${field}'`,
+          "InvalidContentFormat",
+        );
+      }
+      if (typeof parsed[field] !== "string") {
+        throw new ApiError(
+          400,
+          `Invalid ${pageName} content: field '${field}' must be a string`,
+          "InvalidContentFormat",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      400,
+      `Invalid ${pageName} content: must be valid JSON`,
+      "InvalidContentFormat",
+    );
+  }
+}
+
+// Helper to validate Terms of Service content structure (includes desktop/mobile images)
+function validateTermsOfServiceContent(content: string): void {
+  try {
+    const parsed = JSON.parse(content);
+    const requiredFields = [
+      "headerImageDesktop",
+      "headerImageMobile",
+      "title1",
+      "title2",
+    ];
+    for (const field of requiredFields) {
+      if (!(field in parsed)) {
+        throw new ApiError(
+          400,
+          `Invalid Terms of Service content: missing field '${field}'`,
+          "InvalidContentFormat",
+        );
+      }
+      if (typeof parsed[field] !== "string") {
+        throw new ApiError(
+          400,
+          `Invalid Terms of Service content: field '${field}' must be a string`,
+          "InvalidContentFormat",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      400,
+      "Invalid Terms of Service content: must be valid JSON",
+      "InvalidContentFormat",
     );
   }
 }
@@ -118,12 +294,12 @@ contentRouter.get(
       throw new ApiError(
         404,
         `Content not found for page: ${page}`,
-        "ContentNotFound"
+        "ContentNotFound",
       );
     }
 
     res.json(content.toJSON());
-  }
+  },
 );
 
 // 2. Get Public Content (No auth required - for users)
@@ -135,7 +311,7 @@ contentRouter.get("/:page", async (req, res) => {
     throw new ApiError(
       404,
       `Content not found for page: ${page}`,
-      "ContentNotFound"
+      "ContentNotFound",
     );
   }
 
@@ -161,7 +337,7 @@ contentRouter.get(
     const filter: any = {};
     if (pagesFilter && pagesFilter.length > 0) {
       const validPages = pagesFilter.filter((p) =>
-        VALID_PAGES.includes(p as ContentPage)
+        VALID_PAGES.includes(p as ContentPage),
       ) as ContentPage[];
       if (validPages.length > 0) {
         filter.page = { $in: validPages };
@@ -173,7 +349,7 @@ contentRouter.get(
       pages: pages.map((p) => p.toJSON()),
       total: pages.length,
     });
-  }
+  },
 );
 
 const updateContentSchema = z.object({
@@ -197,9 +373,21 @@ contentRouter.put(
       typeof updateContentSchema
     >;
 
-    // Validate content format for About page
+    // Validate content format for structured pages
     if (page === "about") {
       validateAboutContent(content);
+    } else if (page === "shop") {
+      validateShopContent(content);
+    } else if (page === "corporate-bespoke") {
+      validateCorporateBespokeContent(content);
+    } else if (page === "contact") {
+      validateContactContent(content);
+    } else if (page === "terms-of-service") {
+      validateTermsOfServiceContent(content);
+    } else if (
+      ["privacy-policy", "cookie-policy", "returns", "shipping"].includes(page)
+    ) {
+      validatePolicyPageContent(content, PAGE_TITLES[page]);
     }
 
     const title = PAGE_TITLES[page];
@@ -214,7 +402,7 @@ contentRouter.put(
         documentUrl: documentUrl || null,
         updatedBy: req.auth.userId,
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     // Log content update
@@ -230,7 +418,7 @@ contentRouter.put(
     });
 
     res.json(updated.toJSON());
-  }
+  },
 );
 
 // 5. Upload Document
@@ -286,5 +474,5 @@ contentRouter.post(
       size: file.size,
       mimeType: file.mimetype,
     });
-  }
+  },
 );
